@@ -20,14 +20,14 @@ const (
 )
 
 var (
-	mu         = &sync.Mutex{} // global mutex to prevent races on timeSource and clockSeq
-	timeSource timestamp       // please see timestamp.go for info
-	addr       [6]byte         // hardware address used for v1 and v2
-	cs         clockSeq        // used for v1 and v2
+	mu         = sync.Mutex{} // global mutex to prevent races on timeSource and clockSeq
+	timeSource timestamp      // please see timestamp.go for info
+	addr       [6]byte        // hardware address used for v1 and v2
+	cs         clockSeq       // used for v1 and v2
 )
 
 func init() {
-	addr = Addr()
+	addr = hardwareAddr()
 	cs.Init()
 }
 
@@ -99,7 +99,6 @@ func (u *UUID) v2() {
 	binary.BigEndian.PutUint16(u[8:], cs.seq)
 	copy(u[10:], addr[:])
 
-	fmt.Println(u)
 }
 
 func (u *UUID) v3() {
@@ -153,7 +152,7 @@ func insertTimestamp(b []byte, t uint64) {
 // Address attempts to grab a hardware address that is 6 bytes or greater
 // If there is more than one, first one found is ok
 // If one cannot be found the byte array is randomized in accordanize with Section 4.1.6
-func Addr() [6]byte {
+func hardwareAddr() [6]byte {
 
 	var addr [6]byte
 	inter, err := net.Interfaces()
