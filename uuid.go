@@ -23,23 +23,19 @@ var (
 	mu         = sync.Mutex{} // global mutex to prevent races on timeSource and clockSeq
 	timeSource timestamp      // please see timestamp.go for info
 	addr       [6]byte        // hardware address used for v1 and v2
-	cs         clockSeq       // used for v1 and v2
+	clockSeq   uint16         // used for v1 and v2
 )
 
 func init() {
 	addr = hardwareAddr()
-	cs.Init()
-}
-
-type clockSeq struct {
-	seq uint16
+	clockSeqInit()
 }
 
 // Set the clock to random bytes
-func (cs *clockSeq) Init() {
+func clockSeqInit() {
 	var b [2]byte
 	randomBytes(b[:])
-	cs.seq = binary.BigEndian.Uint16(b[:])
+	clockSeq = binary.BigEndian.Uint16(b[:])
 }
 
 type UUID [uuidSize]byte
@@ -79,9 +75,9 @@ func (u *UUID) v1() {
 	u.version(1)
 	u.variant(RFC4122)
 
-	cs.seq++
+	clockSeq++
 
-	binary.BigEndian.PutUint16(u[8:], cs.seq)
+	binary.BigEndian.PutUint16(u[8:], clockSeq)
 	copy(u[10:], addr[:])
 }
 
@@ -94,9 +90,9 @@ func (u *UUID) v2() {
 	insertTimestamp(u[:], timeSource.timestamp())
 	u.version(2)
 
-	cs.seq++
+	clockSeq++
 
-	binary.BigEndian.PutUint16(u[8:], cs.seq)
+	binary.BigEndian.PutUint16(u[8:], clockSeq)
 	copy(u[10:], addr[:])
 
 }
