@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	epochOffset = 122192928000000000 // See uuidTime below
+	epochOffset = 12093408000000000000 // See uuidTime below
 )
 
 // Timestamp https://tools.ietf.org/html/rfc4122#section-4.1.4 and https://tools.ietf.org/html/rfc4122#section-4.1.2
@@ -19,7 +19,7 @@ type timestamp interface {
 }
 
 func getUUIDEpochTime() uint64 {
-	return uint64((time.Now().UnixNano() + epochOffset) / 100) // 100 nano second intervals
+	return (uint64(time.Now().UnixNano()) + epochOffset) / 100 // 100 nano second intervals
 }
 
 // V1
@@ -41,7 +41,7 @@ type uuidDCE struct{}
 func (u *uuidDCE) timestamp() uint64 {
 	t := getUUIDEpochTime()
 	uID := getUser()
-	return t ^ (0xFFFFFFFF) | uint64(uID)
+	return (t ^ 0xFFFFFFFF) | uint64(uID)
 }
 
 //To DO: handle panics

@@ -1,11 +1,16 @@
 package uuid
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
+	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -17,93 +22,162 @@ const (
 	future  = 0x07
 )
 
+var UUIDSizeError = errors.New("UUID Size should 16 bytes")
+var UUIDFormatError = errors.New("UUID is not in the proper format")
+
 var (
 	mu         = sync.Mutex{} // global mutex to prevent races on timeSource and clockSeq
 	timeSource timestamp      // please see timestamp.go for info
 	addr       [6]byte        // hardware address used for v1 and v2
 	clockSeq   uint16         // used for v1 and v2
+
+	uuidRegex = regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 )
 
 func init() {
 	addr = hardwareAddr()
 	clockSeq = clockSeqInit()
+
+	if err := initNamespace(); err != nil {
+		panic(err)
+	}
 }
 
 // UUID ...
 type UUID [uuidSize]byte
 
-// New and String are the only two Public functions
+// NewV1 See https://tools.ietf.org/html/rfc4122#section-4.2.1
+func NewV1() UUID {
 
-// New returns a copy of a UUID
-func New(ver int) UUID {
-
-	var u UUID
-
-	switch ver {
-	default:
-		u.v1()
-	case 2:
-		u.v2()
-	case 4:
-		u.v4()
-	}
-
-	return u
-}
-
-// Format in bytes 4-2-2-2-6
-func (u *UUID) String() string {
-	return fmt.Sprintf("%s-%s-%s-%s-%s", hex.EncodeToString(u[:4]), hex.EncodeToString(u[4:6]), hex.EncodeToString(u[6:8]), hex.EncodeToString(u[8:10]), hex.EncodeToString(u[10:16]))
-}
-
-func (u *UUID) v1() {
+	var uuid UUID
 
 	mu.Lock()
 	defer mu.Unlock()
 
 	timeSource = &uuidTime{}
 
-	insertTimestamp(u[:], timeSource.timestamp())
-	u.version(1)
+	insertTimestamp(uuid[:], timeSource.timestamp())
+	uuid.version(1)
 
 	clockSeq++
 
-	binary.BigEndian.PutUint16(u[8:], clockSeq)
-	u.variant(rfc4122) // must set after setting clockSeq
+	binary.BigEndian.PutUint16(uuid[8:], clockSeq)
+	uuid.variant(rfc4122) // must set after setting clockSeq
 
-	copy(u[10:], addr[:])
+	copy(uuid[10:], addr[:])
+
+	return uuid
 }
 
-func (u *UUID) v2() {
+// NewV2 See http://pubs.opengroup.org/onlinepubs/9629399/apdxa.htm
+func NewV2() UUID {
+
+	var uuid UUID
 
 	mu.Lock()
 	defer mu.Unlock()
 
 	timeSource = &uuidDCE{}
-	insertTimestamp(u[:], timeSource.timestamp())
-	u.version(2)
+	insertTimestamp(uuid[:], timeSource.timestamp())
+	uuid.version(2)
 
 	clockSeq++
 
-	binary.BigEndian.PutUint16(u[8:], clockSeq)
-	u.variant(rfc4122) // must set after setting clockSeq
-	copy(u[10:], addr[:])
+	binary.BigEndian.PutUint16(uuid[8:], clockSeq)
+	uuid.variant(rfc4122) // must set after setting clockSeq
+	copy(uuid[10:], addr[:])
+
+	return uuid
 
 }
 
-// See https://tools.ietf.org/html/rfc4122#section-4.4
-func (u *UUID) v4() {
+// NewV3 See https://tools.ietf.org/html/rfc4122#section-4.3
+func NewV3(namespace UUID, name string) UUID {
+
+	var uuid UUID
+
+	h := md5.New()
+	h.Write(namespace[:])
+	h.Write([]byte(name))
+	copy(uuid[:], h.Sum(nil))
+
+	uuid.version(3)
+	uuid.variant(rfc4122)
+
+	return uuid
+}
+
+// NewV4 See https://tools.ietf.org/html/rfc4122#section-4.4
+func NewV4() UUID {
+
+	var uuid UUID
 
 	mu.Lock()
 	defer mu.Unlock()
 
 	timeSource = &uuidRand{}
-	insertTimestamp(u[:], timeSource.timestamp())
-	u.version(4)
+	insertTimestamp(uuid[:], timeSource.timestamp())
+	uuid.version(4)
 
-	u.variant(rfc4122)
+	uuid.variant(rfc4122)
 	// From Doc: Set all the other bits to randomly (or pseudo-randomly) chosen values
-	randomBytes(u[9:])
+	randomBytes(uuid[9:])
+
+	return uuid
+}
+
+// NewV5 See https://tools.ietf.org/html/rfc4122#section-4.3
+func NewV5(namespace UUID, name string) UUID {
+
+	var uuid UUID
+
+	h := sha1.New()
+	h.Write(namespace[:])
+	h.Write([]byte(name))
+	copy(uuid[:], h.Sum(nil))
+
+	uuid.version(5)
+	uuid.variant(rfc4122)
+
+	return uuid
+}
+
+func FromString(s string) (UUID, error) {
+
+	var uuid UUID
+
+	s = strings.Replace(s, "-", "", -1) //remove the dashes as they will cause an error with hex decode
+
+	b, err := hex.DecodeString(s)
+
+	if err != nil {
+		return uuid, err
+	}
+
+	return FromBytes(b)
+
+}
+
+func FromBytes(b []byte) (UUID, error) {
+
+	var uuid UUID
+
+	if len(b) != uuidSize {
+		return uuid, UUIDSizeError
+	}
+
+	copy(uuid[:], b)
+
+	if !uuidRegex.MatchString(uuid.String()) {
+		return uuid, UUIDFormatError
+	}
+
+	return uuid, nil
+}
+
+// Format in bytes 4-2-2-2-6
+func (u *UUID) String() string {
+	return fmt.Sprintf("%s-%s-%s-%s-%s", hex.EncodeToString(u[:4]), hex.EncodeToString(u[4:6]), hex.EncodeToString(u[6:8]), hex.EncodeToString(u[8:10]), hex.EncodeToString(u[10:16]))
 }
 
 // https://tools.ietf.org/html/rfc4122 (Section: 4.1.3)

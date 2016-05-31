@@ -1,17 +1,11 @@
 package uuid
 
 import (
-	"fmt"
-	"regexp"
 	"testing"
 )
 
 const (
 	testSize = 100000
-)
-
-var (
-	uuidRegex = regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 )
 
 func TestInsertTimestamp(t *testing.T) {
@@ -36,8 +30,6 @@ func TestVersion(t *testing.T) {
 			t.Error("Version is not correct:", uuid[6], "should be:", uint8(i<<4))
 		}
 	}
-
-	fmt.Println("")
 }
 
 func TestVariant(t *testing.T) {
@@ -54,13 +46,45 @@ func TestVariant(t *testing.T) {
 
 }
 
+func TestFromStringBadFormat(t *testing.T) {
+	// the 6 in the third grouping (61d1) is wrong
+	s := "6ba7b814-9dad-61d1-80b4-00c04fd430c8"
+	_, err := FromString(s)
+
+	if err == nil {
+		t.Error("FromString did not detect bad uuid String")
+	}
+}
+
+func TestFromBytesBadFormat(t *testing.T) {
+	b := make([]byte, 16)
+	_, err := FromBytes(b)
+
+	if err != UUIDFormatError {
+		t.Error("FromBytes did not detect bad uuid String")
+	}
+}
+
+func TestFromBytesWrongLen(t *testing.T) {
+
+	uuid := NewV1()
+	b := make([]byte, 10)
+	copy(b, uuid[:])
+
+	_, err := FromBytes(b)
+
+	if err != UUIDSizeError {
+		t.Error("FromBytes did not detect wrong length")
+	}
+}
+
 func TestRegexV1(t *testing.T) {
 
 	for i := 0; i < testSize; i++ {
-		uuid := New(1)
+		uuid := NewV1()
 
 		if !uuidRegex.MatchString(uuid.String()) {
-			t.Error("V1 does not pass regex test", uuid.String())
+			t.Error("v1 does not pass regex test", uuid.String())
 		}
 	}
 }
@@ -69,7 +93,7 @@ func TestMutexV1(t *testing.T) {
 
 	for i := 0; i < testSize/10; i++ {
 		go func() {
-			New(1)
+			NewV1()
 		}()
 	}
 }
@@ -78,7 +102,7 @@ func TestCollisionV1(t *testing.T) {
 	uuids := make(map[UUID]uint8)
 
 	for i := 0; i < testSize; i++ {
-		uuid := New(1)
+		uuid := NewV1()
 
 		_, ok := uuids[uuid]
 
@@ -93,7 +117,7 @@ func TestCollisionV1(t *testing.T) {
 func TestRegexV2(t *testing.T) {
 
 	for i := 0; i < testSize; i++ {
-		uuid := New(2)
+		uuid := NewV2()
 		if !uuidRegex.MatchString(uuid.String()) {
 			t.Error("V2 does not pass regex test", uuid.String())
 		}
@@ -104,7 +128,7 @@ func TestMutexV2(t *testing.T) {
 
 	for i := 0; i < testSize/10; i++ {
 		go func() {
-			New(2)
+			NewV2()
 		}()
 	}
 }
@@ -113,7 +137,7 @@ func TestCollisionV2(t *testing.T) {
 	uuids := make(map[UUID]uint8)
 
 	for i := 0; i < testSize; i++ {
-		uuid := New(2)
+		uuid := NewV2()
 
 		_, ok := uuids[uuid]
 
@@ -125,10 +149,32 @@ func TestCollisionV2(t *testing.T) {
 	}
 }
 
+func TestRegexV3(t *testing.T) {
+
+	uuid := NewV3(DNSNamespace, "google")
+
+	if !uuidRegex.MatchString(uuid.String()) {
+		t.Error("V3 does not pass regex test", uuid.String())
+	}
+}
+
+// V3 requires collisions for same name and namespace
+// See https://tools.ietf.org/html/rfc4122#section-4.3
+func TestCollisionV3(t *testing.T) {
+
+	uuid := NewV3(URLNamespace, "google")
+	uuid2 := NewV3(URLNamespace, "google")
+
+	if uuid.String() != uuid.String() {
+		t.Error("V3 does not pass collision", uuid.String(), uuid2.String())
+	}
+
+}
+
 func TestRegexV4(t *testing.T) {
 
 	for i := 0; i < testSize; i++ {
-		uuid := New(4)
+		uuid := NewV4()
 
 		if !uuidRegex.MatchString(uuid.String()) {
 			t.Error("V4 does not pass regex test", uuid.String())
@@ -140,7 +186,7 @@ func TestMutexV4(t *testing.T) {
 
 	for i := 0; i < testSize/10; i++ {
 		go func() {
-			New(4)
+			NewV4()
 		}()
 	}
 }
@@ -149,7 +195,7 @@ func TestCollisionV4(t *testing.T) {
 	uuids := make(map[UUID]uint8)
 
 	for i := 0; i < testSize; i++ {
-		uuid := New(4)
+		uuid := NewV4()
 
 		_, ok := uuids[uuid]
 
@@ -159,6 +205,28 @@ func TestCollisionV4(t *testing.T) {
 			uuids[uuid] = 0
 		}
 	}
+}
+
+func TestRegexV5(t *testing.T) {
+
+	uuid := NewV5(DNSNamespace, "google")
+
+	if !uuidRegex.MatchString(uuid.String()) {
+		t.Error("V5 does not pass regex test", uuid.String())
+	}
+}
+
+// V5 requires collisions for same name and namespace
+// See https://tools.ietf.org/html/rfc4122#section-4.3
+func TestCollisionV5(t *testing.T) {
+
+	uuid := NewV5(DNSNamespace, "google")
+	uuid2 := NewV5(DNSNamespace, "google")
+
+	if uuid.String() != uuid.String() {
+		t.Error("V5 does not pass collision", uuid.String(), uuid2.String())
+	}
+
 }
 
 func TestClockSeqInit(t *testing.T) {
