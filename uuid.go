@@ -22,28 +22,31 @@ const (
 	future  = 0x07
 )
 
-var UUIDSizeError = errors.New("UUID Size should 16 bytes")
-var UUIDFormatError = errors.New("UUID is not in the proper format")
-
 var (
-	mu         = sync.Mutex{} // global mutex to prevent races on timeSource and clockSeq
-	timeSource timestamp      // please see timestamp.go for info
-	addr       [6]byte        // hardware address used for v1 and v2
-	clockSeq   uint16         // used for v1 and v2
+	mu         = sync.Mutex{}   // global mutex to prevent races on timeSource and clockSeq
+	timeSource timestamp        // please see timestamp.go for info
+	addr       [6]byte          // hardware address used for v1 and v2
+	clockSeq   = clockSeqInit() // used for v1 and v2
 
 	uuidRegex = regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+
+	// ErrUUIDSize makes sure byte array is the correct size
+	ErrUUIDSize = errors.New("UUID Size should 16 bytes")
+
+	// ErrUUIDFormat will return if UUID does not pass uuidRegex
+	ErrUUIDFormat = errors.New("UUID is not in the proper format")
 )
 
 func init() {
 	addr = hardwareAddr()
-	clockSeq = clockSeqInit()
 
 	if err := initNamespace(); err != nil {
 		panic(err)
 	}
 }
 
-// UUID ...
+// UUID is 128 bits used to create a A Universally Unique IDentifier (UUID) URN Namespace
+// Its specifications are described in RFC4122 and can be found https://tools.ietf.org/html/rfc4122
 type UUID [uuidSize]byte
 
 // NewV1 See https://tools.ietf.org/html/rfc4122#section-4.2.1
@@ -92,19 +95,29 @@ func NewV2() UUID {
 }
 
 // NewV3 See https://tools.ietf.org/html/rfc4122#section-4.3
-func NewV3(namespace UUID, name string) UUID {
+func NewV3(namespace UUID, name string) (UUID, error) {
 
 	var uuid UUID
 
 	h := md5.New()
-	h.Write(namespace[:])
-	h.Write([]byte(name))
+	_, err := h.Write(namespace[:])
+
+	if err != nil {
+		return uuid, err
+	}
+
+	_, err = h.Write([]byte(name))
+
+	if err != nil {
+		return uuid, err
+	}
+
 	copy(uuid[:], h.Sum(nil))
 
 	uuid.version(3)
 	uuid.variant(rfc4122)
 
-	return uuid
+	return uuid, nil
 }
 
 // NewV4 See https://tools.ietf.org/html/rfc4122#section-4.4
@@ -127,21 +140,33 @@ func NewV4() UUID {
 }
 
 // NewV5 See https://tools.ietf.org/html/rfc4122#section-4.3
-func NewV5(namespace UUID, name string) UUID {
+func NewV5(namespace UUID, name string) (UUID, error) {
 
 	var uuid UUID
 
 	h := sha1.New()
-	h.Write(namespace[:])
-	h.Write([]byte(name))
+	_, err := h.Write(namespace[:])
+
+	if err != nil {
+		return uuid, err
+	}
+
+	_, err = h.Write([]byte(name))
+
+	if err != nil {
+		return uuid, err
+	}
+
 	copy(uuid[:], h.Sum(nil))
 
 	uuid.version(5)
 	uuid.variant(rfc4122)
 
-	return uuid
+	return uuid, nil
 }
 
+// FromString will attempt to convert a uuid hex string into a uuid byte array
+// if string does not pass regex text ErrUUIDFormat will be returned
 func FromString(s string) (UUID, error) {
 
 	var uuid UUID
@@ -158,18 +183,20 @@ func FromString(s string) (UUID, error) {
 
 }
 
+// FromBytes will take a in a slice of bytes and attempts to convert into
+// a UUID. If bytes does not pass format or is wrong size and error will be returned
 func FromBytes(b []byte) (UUID, error) {
 
 	var uuid UUID
 
 	if len(b) != uuidSize {
-		return uuid, UUIDSizeError
+		return uuid, ErrUUIDSize
 	}
 
 	copy(uuid[:], b)
 
 	if !uuidRegex.MatchString(uuid.String()) {
-		return uuid, UUIDFormatError
+		return uuid, ErrUUIDFormat
 	}
 
 	return uuid, nil

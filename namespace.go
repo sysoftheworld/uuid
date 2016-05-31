@@ -1,9 +1,16 @@
 package uuid
 
 var (
-	DNSNamespace  UUID
-	URLNamespace  UUID
-	IODNamespace  UUID
+	// DNSNamespace a fully qualified domain name
+	DNSNamespace UUID
+
+	// URLNamespace is a URL
+	URLNamespace UUID
+
+	// IODNamespace is an ISO OID
+	IODNamespace UUID
+
+	// X500Namespace is an X.500 DN
 	X500Namespace UUID
 )
 

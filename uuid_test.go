@@ -47,20 +47,34 @@ func TestVariant(t *testing.T) {
 }
 
 func TestFromStringBadFormat(t *testing.T) {
-	// the 6 in the third grouping (61d1) is wrong
-	s := "6ba7b814-9dad-61d1-80b4-00c04fd430c8"
-	_, err := FromString(s)
 
-	if err == nil {
-		t.Error("FromString did not detect bad uuid String")
+	t.Parallel()
+
+	tests := []struct {
+		uuid string
+	}{
+		{
+			uuid: "6ba7b814-9dad-61d1-80b4-00c04fd430c8", // wrong version
+		},
+		{
+			uuid: "6ba7b814-9dad-11d1-30b4-00c04fd430c8", // wrong variant
+		},
 	}
+
+	for _, test := range tests {
+		_, err := FromString(test.uuid)
+		if err == nil {
+			t.Error("FromString did not detect bad uuid String")
+		}
+	}
+
 }
 
 func TestFromBytesBadFormat(t *testing.T) {
 	b := make([]byte, 16)
 	_, err := FromBytes(b)
 
-	if err != UUIDFormatError {
+	if err != ErrUUIDFormat {
 		t.Error("FromBytes did not detect bad uuid String")
 	}
 }
@@ -73,7 +87,7 @@ func TestFromBytesWrongLen(t *testing.T) {
 
 	_, err := FromBytes(b)
 
-	if err != UUIDSizeError {
+	if err != ErrUUIDSize {
 		t.Error("FromBytes did not detect wrong length")
 	}
 }
@@ -151,7 +165,11 @@ func TestCollisionV2(t *testing.T) {
 
 func TestRegexV3(t *testing.T) {
 
-	uuid := NewV3(DNSNamespace, "google")
+	uuid, err := NewV3(DNSNamespace, "google")
+
+	if err != nil {
+		t.Error("V3 error", err)
+	}
 
 	if !uuidRegex.MatchString(uuid.String()) {
 		t.Error("V3 does not pass regex test", uuid.String())
@@ -162,8 +180,12 @@ func TestRegexV3(t *testing.T) {
 // See https://tools.ietf.org/html/rfc4122#section-4.3
 func TestCollisionV3(t *testing.T) {
 
-	uuid := NewV3(URLNamespace, "google")
-	uuid2 := NewV3(URLNamespace, "google")
+	uuid, u1err := NewV3(URLNamespace, "google")
+	uuid2, u2err := NewV3(URLNamespace, "google")
+
+	if u1err != nil || u2err != nil {
+		t.Error("V3 error", u1err, u2err)
+	}
 
 	if uuid.String() != uuid.String() {
 		t.Error("V3 does not pass collision", uuid.String(), uuid2.String())
@@ -209,7 +231,11 @@ func TestCollisionV4(t *testing.T) {
 
 func TestRegexV5(t *testing.T) {
 
-	uuid := NewV5(DNSNamespace, "google")
+	uuid, err := NewV5(DNSNamespace, "google")
+
+	if err != nil {
+		t.Error("V5 error", err)
+	}
 
 	if !uuidRegex.MatchString(uuid.String()) {
 		t.Error("V5 does not pass regex test", uuid.String())
@@ -220,8 +246,12 @@ func TestRegexV5(t *testing.T) {
 // See https://tools.ietf.org/html/rfc4122#section-4.3
 func TestCollisionV5(t *testing.T) {
 
-	uuid := NewV5(DNSNamespace, "google")
-	uuid2 := NewV5(DNSNamespace, "google")
+	uuid, u1err := NewV5(DNSNamespace, "google")
+	uuid2, u2err := NewV5(DNSNamespace, "google")
+
+	if u1err != nil || u2err != nil {
+		t.Error("V3 error", u1err, u2err)
+	}
 
 	if uuid.String() != uuid.String() {
 		t.Error("V5 does not pass collision", uuid.String(), uuid2.String())
