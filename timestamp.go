@@ -40,8 +40,8 @@ type uuidDCE struct{}
 
 func (u *uuidDCE) timestamp() uint64 {
 	t := getUUIDEpochTime()
-	uId := getUser()
-	return t ^ (0xFFFFFFFF) | uint64(uId)
+	uID := getUser()
+	return t ^ (0xFFFFFFFF) | uint64(uID)
 }
 
 //To DO: handle panics

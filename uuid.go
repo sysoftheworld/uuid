@@ -13,10 +13,8 @@ const (
 	uuidSize = 16
 
 	// https://tools.ietf.org/html/rfc4122#section-4.1.1
-	NCS       = 0x00
-	RFC4122   = 0x04
-	Microsoft = 0x05
-	Future    = 0x07
+	rfc4122 = 0x04
+	future  = 0x07
 )
 
 var (
@@ -28,21 +26,15 @@ var (
 
 func init() {
 	addr = hardwareAddr()
-	clockSeqInit()
+	clockSeq = clockSeqInit()
 }
 
-// Set the clock to random bytes
-func clockSeqInit() {
-	var b [2]byte
-	randomBytes(b[:])
-	clockSeq = binary.BigEndian.Uint16(b[:])
-}
-
+// UUID ...
 type UUID [uuidSize]byte
 
 // New and String are the only two Public functions
 
-// Return a copy of a UUID
+// New returns a copy of a UUID
 func New(ver int) UUID {
 
 	var u UUID
@@ -73,11 +65,12 @@ func (u *UUID) v1() {
 
 	insertTimestamp(u[:], timeSource.timestamp())
 	u.version(1)
-	u.variant(RFC4122)
 
 	clockSeq++
 
 	binary.BigEndian.PutUint16(u[8:], clockSeq)
+	u.variant(rfc4122) // must set after setting clockSeq
+
 	copy(u[10:], addr[:])
 }
 
@@ -93,11 +86,8 @@ func (u *UUID) v2() {
 	clockSeq++
 
 	binary.BigEndian.PutUint16(u[8:], clockSeq)
+	u.variant(rfc4122) // must set after setting clockSeq
 	copy(u[10:], addr[:])
-
-}
-
-func (u *UUID) v3() {
 
 }
 
@@ -111,30 +101,35 @@ func (u *UUID) v4() {
 	insertTimestamp(u[:], timeSource.timestamp())
 	u.version(4)
 
-	// From Doc: Set the two most significant bits (bits 6 and 7) of
-	// the clock_seq_hi_and_reserved to zero and one, respectively.
-	// I am assuming bits are 0 index meaning 7 not 8 is highest bit
-	u[8] = u[8] | 0x64
-
-	u.variant(RFC4122)
+	u.variant(rfc4122)
 	// From Doc: Set all the other bits to randomly (or pseudo-randomly) chosen values
 	randomBytes(u[9:])
-}
-
-func (u *UUID) v5() {
-
 }
 
 // https://tools.ietf.org/html/rfc4122 (Section: 4.1.3)
 // The version number is in the most significant 4 bits of the time
 // stamp (bits 4 through 7 of the time_hi_and_version field).
 func (u *UUID) version(v byte) {
-	u[6] = (v & 0x0F) | (v << 4)
+	u[6] = (u[6] & 0x0F) | (v << 4)
 }
 
 // https://tools.ietf.org/html/rfc4122#section-4.1.1
 func (u *UUID) variant(v byte) {
-	u[8] = (v & 0xBF) | (v << 4)
+	var mask byte
+
+	//0x3F clear top 2
+	//0x1F clear top 3
+
+	switch v {
+	default:
+		mask = 0x3F
+	case rfc4122:
+		mask = 0x3F
+	case future:
+		mask = 0x1F
+	}
+
+	u[8] = (u[8] & mask) | (v << 5)
 }
 
 // Timestamp layout and byte order https://tools.ietf.org/html/rfc4122#section-4.1.2
@@ -171,6 +166,13 @@ func hardwareAddr() [6]byte {
 	// randomize it
 	randomBytes(addr[:])
 	return addr
+}
+
+// Set the clock to random bytes
+func clockSeqInit() uint16 {
+	var b [2]byte
+	randomBytes(b[:])
+	return binary.BigEndian.Uint16(b[:])
 }
 
 // See https://golang.org/pkg/math/rand/#Read
