@@ -8,6 +8,8 @@ const (
 	testSize = 100000
 )
 
+func devNull(i interface{}) {}
+
 func TestInsertTimestamp(t *testing.T) {
 
 	b := make([]byte, 8)
@@ -274,5 +276,40 @@ func TestClockSeqInit(t *testing.T) {
 	}
 	if dup > 10 {
 		t.Error("Clock Sequence is not random")
+	}
+}
+
+func BenchmarkV1(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		uuid := NewV1()
+		devNull(uuid)
+	}
+}
+
+func BenchmarkV2(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		uuid := NewV2()
+		devNull(uuid)
+	}
+}
+
+func BenchmarkV3(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		uuid, _ := NewV3(DNSNamespace, "name")
+		devNull(uuid)
+	}
+}
+
+func BenchmarkV4(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		uuid := NewV4()
+		devNull(uuid)
+	}
+}
+
+func BenchmarkV5(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		uuid, _ := NewV5(DNSNamespace, "name")
+		devNull(uuid)
 	}
 }

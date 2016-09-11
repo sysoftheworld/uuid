@@ -91,7 +91,6 @@ func NewV2() UUID {
 	copy(uuid[10:], addr[:])
 
 	return uuid
-
 }
 
 // NewV3 See https://tools.ietf.org/html/rfc4122#section-4.3
